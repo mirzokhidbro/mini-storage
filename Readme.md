@@ -4,6 +4,7 @@ A simple relational database management system implementation in Go.
 
 ## Project Structure
 
+
 ```
 rdbms/
 ├── cmd/                  # Main application entry point
@@ -40,18 +41,3 @@ rdbms/
 - SQL query parsing and execution
 - Transaction management with ACID properties
 - Command-line interface with REPL
-
-## Getting Started
-
-To run the database:
-
-```bash
-go run cmd/main.go
-```
-
-## Testing
-
-Run all tests with:
-
-```bash
-go test ./...
