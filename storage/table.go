@@ -16,3 +16,11 @@ type Column struct {
 type Schema struct {
 	Columns []Column
 }
+
+type Record struct {
+	Items []Item
+}
+
+type Item struct {
+	Literal interface{}
+}

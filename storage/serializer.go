@@ -1,6 +1,10 @@
 package storage
 
-import "encoding/binary"
+import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
+)
 
 func SerializeSchema(schema *Schema) []byte {
 	size := 2
@@ -56,4 +60,54 @@ func DeserializeSchema(schema []byte) Schema {
 	}
 
 	return Schema{columns}
+}
+
+func SerializeRecord(schema Schema, record Record) bytes.Buffer {
+	column_count := len(schema.Columns)
+	var buf bytes.Buffer
+
+	for i := 0; i < column_count; i++ {
+		switch schema.Columns[i].Type {
+		case 0: // integer
+			literal, ok := record.Items[i].Literal.(int)
+			if ok {
+				binary.Write(&buf, binary.LittleEndian, int64(literal))
+			} else {
+				fmt.Println("invalid data type for integer")
+			}
+		case 1: // varchar
+			literal, ok := record.Items[i].Literal.(string)
+			if ok {
+				literal_length := len(literal)
+				binary.Write(&buf, binary.LittleEndian, int16(literal_length))
+				buf.Write([]byte(literal))
+			} else {
+				fmt.Println("invalid data type for string")
+			}
+		}
+	}
+
+	return buf
+}
+
+func DeserializeRecord(schema Schema, raw bytes.Buffer) {
+	data := raw.Bytes()
+	fmt.Println(data)
+	offset := 0
+
+	for i := 0; i < len(schema.Columns); i++ {
+		switch schema.Columns[i].Type {
+		case 0: //int
+			val := int64(binary.LittleEndian.Uint64(data[offset : offset+8]))
+			offset += 8
+			fmt.Println("Int64:", val)
+
+		case 1: //varchar
+			strlen := int(binary.LittleEndian.Uint16(data[offset : offset+2]))
+			offset += 2
+			str := string(data[offset : offset+strlen])
+			offset += strlen
+			fmt.Println("String:", str)
+		}
+	}
 }
