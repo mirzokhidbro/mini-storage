@@ -62,7 +62,7 @@ func DeserializeSchema(schema []byte) Schema {
 	return Schema{columns}
 }
 
-func SerializeRecord(schema Schema, record Record) bytes.Buffer {
+func SerializeRecord(schema Schema, record Record) []byte {
 	column_count := len(schema.Columns)
 	var buf bytes.Buffer
 
@@ -87,11 +87,10 @@ func SerializeRecord(schema Schema, record Record) bytes.Buffer {
 		}
 	}
 
-	return buf
+	return buf.Bytes()
 }
 
-func DeserializeRecord(schema Schema, raw bytes.Buffer) {
-	data := raw.Bytes()
+func DeserializeRecord(schema Schema, data []byte) {
 	fmt.Println(data)
 	offset := 0
 

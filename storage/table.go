@@ -30,7 +30,7 @@ type Item struct {
 }
 
 type TableManager struct {
-	fileManager *FileManager
+	FileManager *FileManager
 }
 
 func NewTableManager(filePath string) (*TableManager, error) {
@@ -38,28 +38,44 @@ func NewTableManager(filePath string) (*TableManager, error) {
 	if err != nil {
 		panic(err.Error())
 	}
-	return &TableManager{fileManager: file_manager}, nil
+	return &TableManager{FileManager: file_manager}, nil
 }
 
 func (tm *TableManager) CreateTable(name string, schema *Schema) error {
-	exist, err := tm.fileManager.FileExists(name + ".schema")
+	schema_exist, err := tm.FileManager.FileExists(name + ".schema")
 
 	if err != nil {
 		return err
 	}
 
-	if exist {
-		return errors.New("file already exist")
+	if schema_exist {
+		return errors.New("file already exists")
 	}
 
-	file, err := tm.fileManager.CreateFile(name + ".schema")
+	table_exist, err := tm.FileManager.FileExists(name + ".table")
+
+	if err != nil {
+		return err
+	}
+
+	if table_exist {
+		return errors.New("table already exists")
+	}
+
+	schema_file, err := tm.FileManager.CreateFile(name + ".schema")
+
+	if err != nil {
+		return err
+	}
+
+	_, err = tm.FileManager.CreateFile(name + ".table")
 
 	if err != nil {
 		return err
 	}
 
 	serialized_schema := SerializeSchema(schema)
-	_, err = file.Write(serialized_schema)
+	_, err = schema_file.Write(serialized_schema)
 
 	if err != nil {
 		return err
@@ -70,7 +86,7 @@ func (tm *TableManager) CreateTable(name string, schema *Schema) error {
 
 func (tm *TableManager) GetTable(name string) (schema Schema, err error) {
 	schema = Schema{}
-	exist, err := tm.fileManager.FileExists(name)
+	exist, err := tm.FileManager.FileExists(name)
 	if err != nil {
 		return schema, err
 	}
@@ -79,7 +95,7 @@ func (tm *TableManager) GetTable(name string) (schema Schema, err error) {
 		return schema, errors.New("table does not exist")
 	}
 
-	data, err := tm.fileManager.ReadAll()
+	data, err := tm.FileManager.ReadAll()
 	if err != nil {
 		return schema, err
 	}

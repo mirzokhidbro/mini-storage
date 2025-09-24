@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"errors"
 	"io"
 	"os"
 	"sync"
@@ -12,8 +13,11 @@ type FileManager struct {
 }
 
 func NewFileManager(filePath string) (*FileManager, error) {
-	file, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE, 0666)
+	file, err := os.OpenFile(filePath, os.O_RDWR, 0666)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return &FileManager{file: nil}, nil
+		}
 		return nil, err
 	}
 	return &FileManager{file: file}, nil
@@ -86,4 +90,23 @@ func (fm *FileManager) OpenFile(name string) (*os.File, error) {
 	fm.lock.Lock()
 	defer fm.lock.Unlock()
 	return os.OpenFile(name, os.O_RDWR, 0666)
+}
+
+func (fm *FileManager) GetFileSize(name string) (int64, error) {
+	exist, err := fm.FileExists(name)
+	if err != nil {
+		return 0, err
+	}
+
+	if !exist {
+		return 0, errors.New("file does not exist")
+	}
+
+	info, err := fm.file.Stat()
+
+	if err != nil {
+		return 0, err
+	}
+
+	return info.Size(), nil
 }
