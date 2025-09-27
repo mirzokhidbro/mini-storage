@@ -84,7 +84,7 @@ func (tm *TableManager) CreateTable(name string, schema *Schema) error {
 	return nil
 }
 
-func (tm *TableManager) GetTable(name string) (schema Schema, err error) {
+func (tm *TableManager) GetTableSchema(name string) (schema Schema, err error) {
 	schema = Schema{}
 	exist, err := tm.FileManager.FileExists(name)
 	if err != nil {
@@ -102,4 +102,43 @@ func (tm *TableManager) GetTable(name string) (schema Schema, err error) {
 	schema = DeserializeSchema(data)
 
 	return schema, nil
+}
+
+func (tm *TableManager) Insert(schema Schema, record Record) error {
+	serialized_record := SerializeRecord(schema, record)
+
+	if len(serialized_record) > 200 {
+		return errors.New("record cannot be greater than 200 bayt")
+	}
+
+	size, err := tm.FileManager.GetFileSize("table")
+
+	if err != nil {
+		return err
+	}
+
+	offset := (int64(size/200) + 1) * 200
+
+	err = tm.FileManager.Write("table", offset, serialized_record)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (tm *TableManager) GetAllData() (record []byte, err error) {
+	size, err := tm.FileManager.GetFileSize("table")
+	if err != nil {
+		return nil, err
+	}
+
+	records, err := tm.FileManager.Read(0, int(size))
+
+	if err != nil {
+		return nil, err
+	}
+
+	return records, nil
 }
