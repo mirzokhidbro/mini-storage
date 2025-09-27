@@ -2,42 +2,64 @@ package storage
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"sync"
 )
 
 type FileManager struct {
-	file *os.File
-	lock sync.Mutex
+	recordFile *os.File
+	schemaFile *os.File
+	lock       sync.Mutex
 }
 
-func NewFileManager(filePath string) (*FileManager, error) {
-	file, err := os.OpenFile(filePath, os.O_RDWR, 0666)
+func NewFileManager(fileName string) (*FileManager, error) {
+	var recordFile, schemaFile *os.File
+	var err error
+
+	recordFile, err = os.OpenFile(fileName+".table", os.O_RDWR, 0666)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return &FileManager{file: nil}, nil
+		if !os.IsNotExist(err) {
+			return nil, err
 		}
-		return nil, err
+		recordFile = nil
 	}
-	return &FileManager{file: file}, nil
+
+	schemaFile, err = os.OpenFile(fileName+".schema", os.O_RDWR, 0666)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+		schemaFile = nil
+	}
+
+	return &FileManager{recordFile: recordFile, schemaFile: schemaFile}, nil
 }
 
-func (fm *FileManager) Write(offset int64, data []byte) error {
+func (fm *FileManager) Write(fileType string, offset int64, data []byte) error {
 	fm.lock.Lock()
 	defer fm.lock.Unlock()
-	_, err := fm.file.WriteAt(data, offset)
-	if err != nil {
-		return err
+	if fileType == "schema" {
+		_, err := fm.schemaFile.WriteAt(data, offset)
+		if err != nil {
+			return err
+		}
+		return fm.schemaFile.Sync()
+	} else {
+		_, err := fm.recordFile.WriteAt(data, offset)
+		if err != nil {
+			return err
+		}
+		return fm.recordFile.Sync()
 	}
-	return fm.file.Sync()
 }
 
 func (fm *FileManager) Read(offset int64, size int) ([]byte, error) {
 	fm.lock.Lock()
 	defer fm.lock.Unlock()
 	data := make([]byte, size)
-	n, err := fm.file.ReadAt(data, offset)
+	n, err := fm.recordFile.ReadAt(data, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -48,17 +70,17 @@ func (fm *FileManager) ReadAll() ([]byte, error) {
 	fm.lock.Lock()
 	defer fm.lock.Unlock()
 
-	if _, err := fm.file.Seek(0, io.SeekStart); err != nil {
+	if _, err := fm.schemaFile.Seek(0, io.SeekStart); err != nil {
 		return nil, err
 	}
 
-	return io.ReadAll(fm.file)
+	return io.ReadAll(fm.schemaFile)
 }
 
-func (fm *FileManager) Close() error {
+func (fm *FileManager) Close(fileType string) error {
 	fm.lock.Lock()
 	defer fm.lock.Unlock()
-	return fm.file.Close()
+	return fm.schemaFile.Close()
 }
 
 func (fm *FileManager) FileExists(name string) (bool, error) {
@@ -92,8 +114,30 @@ func (fm *FileManager) OpenFile(name string) (*os.File, error) {
 	return os.OpenFile(name, os.O_RDWR, 0666)
 }
 
-func (fm *FileManager) GetFileSize(name string) (int64, error) {
-	exist, err := fm.FileExists(name)
+func (fm *FileManager) GetFileSize(fileType string) (int64, error) {
+	if fileType == "schema" {
+		exist, err := fm.FileExists(fm.schemaFile.Name())
+		if err != nil {
+			return 0, err
+		}
+
+		if !exist {
+			return 0, errors.New("file does not exist")
+		}
+
+		info, err := fm.schemaFile.Stat()
+
+		if err != nil {
+			return 0, err
+		}
+
+		return info.Size(), nil
+	}
+
+	fmt.Println("record file name")
+	fmt.Println(fm.recordFile.Name())
+
+	exist, err := fm.FileExists(fm.recordFile.Name())
 	if err != nil {
 		return 0, err
 	}
@@ -102,7 +146,7 @@ func (fm *FileManager) GetFileSize(name string) (int64, error) {
 		return 0, errors.New("file does not exist")
 	}
 
-	info, err := fm.file.Stat()
+	info, err := fm.recordFile.Stat()
 
 	if err != nil {
 		return 0, err
