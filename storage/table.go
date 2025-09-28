@@ -108,7 +108,7 @@ func (tm *TableManager) Insert(schema Schema, record Record) error {
 	serialized_record := SerializeRecord(schema, record)
 
 	if len(serialized_record) > 200 {
-		return errors.New("record cannot be greater than 200 bayt")
+		return errors.New("record cannot be greater than 200 bytes")
 	}
 
 	size, err := tm.FileManager.GetFileSize("table")
@@ -128,16 +128,23 @@ func (tm *TableManager) Insert(schema Schema, record Record) error {
 	return nil
 }
 
-func (tm *TableManager) GetAllData() (record []byte, err error) {
+func (tm *TableManager) GetAllData(schema Schema) (records []Record, err error) {
 	size, err := tm.FileManager.GetFileSize("table")
 	if err != nil {
 		return nil, err
 	}
 
-	records, err := tm.FileManager.Read(0, int(size))
+	record_count := int64(size / 200)
+	binary_data, err := tm.FileManager.Read(0, int(size))
 
 	if err != nil {
 		return nil, err
+	}
+
+	for i := 1; i <= int(record_count); i++ {
+		slice := binary_data[(i-1)*200 : i*200]
+		record := DeserializeRecord(schema, slice)
+		records = append(records, record)
 	}
 
 	return records, nil

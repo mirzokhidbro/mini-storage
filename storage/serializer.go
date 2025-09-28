@@ -90,23 +90,25 @@ func SerializeRecord(schema Schema, record Record) []byte {
 	return buf.Bytes()
 }
 
-func DeserializeRecord(schema Schema, data []byte) {
-	fmt.Println(data)
+func DeserializeRecord(schema Schema, data []byte) Record {
 	offset := 0
+	items := make([]Item, 0, len(schema.Columns))
 
 	for i := 0; i < len(schema.Columns); i++ {
 		switch schema.Columns[i].Type {
-		case 0: //int
-			val := int64(binary.LittleEndian.Uint64(data[offset : offset+8]))
+		case 0: // int
+			val := int64(binary.LittleEndian.Uint64(data[offset:]))
 			offset += 8
-			fmt.Println("Int64:", val)
+			items = append(items, Item{Literal: val})
 
-		case 1: //varchar
-			strlen := int(binary.LittleEndian.Uint16(data[offset : offset+2]))
+		case 1: // varchar
+			strlen := int(binary.LittleEndian.Uint16(data[offset:]))
 			offset += 2
 			str := string(data[offset : offset+strlen])
 			offset += strlen
-			fmt.Println("String:", str)
+			items = append(items, Item{Literal: str})
 		}
 	}
+
+	return Record{Items: items}
 }
