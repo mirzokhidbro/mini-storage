@@ -55,7 +55,7 @@ func (fm *FileManager) Write(fileType string, offset int64, data []byte) error {
 	}
 }
 
-func (fm *FileManager) Read(offset int64, size int) ([]byte, error) {
+func (fm *FileManager) Read(offset int64, size int64) ([]byte, error) {
 	fm.lock.Lock()
 	defer fm.lock.Unlock()
 	data := make([]byte, size)

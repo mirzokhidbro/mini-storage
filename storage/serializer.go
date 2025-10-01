@@ -97,12 +97,12 @@ func DeserializeRecord(schema Schema, data []byte) Record {
 	for i := 0; i < len(schema.Columns); i++ {
 		switch schema.Columns[i].Type {
 		case 0: // int
-			val := int64(binary.LittleEndian.Uint64(data[offset:]))
+			val := int64(binary.LittleEndian.Uint64(data[offset : offset+8]))
 			offset += 8
 			items = append(items, Item{Literal: val})
 
 		case 1: // varchar
-			strlen := int(binary.LittleEndian.Uint16(data[offset:]))
+			strlen := int(binary.LittleEndian.Uint16(data[offset : offset+2]))
 			offset += 2
 			str := string(data[offset : offset+strlen])
 			offset += strlen
