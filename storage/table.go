@@ -207,7 +207,7 @@ func (tm *TableManager) FindOrCreatePage(record []byte) (page []byte, page_order
 
 		free_space_length := PageSize - ((record_count+1)*4 + free_space_pointer)
 
-		if free_space_length > record_size {
+		if free_space_length >= record_size {
 			slot_beginning_address := (PageSize - record_count*4) - 4
 			record_count++
 			binary.LittleEndian.PutUint16(page[:2], uint16(record_count))
@@ -226,7 +226,7 @@ func (tm *TableManager) FindOrCreatePage(record []byte) (page []byte, page_order
 
 	page = make([]byte, PageSize)
 	binary.LittleEndian.PutUint16(page[:2], uint16(1))
-	binary.LittleEndian.PutUint16(page[2:4], uint16(len(record)))
+	binary.LittleEndian.PutUint16(page[2:4], uint16(4+len(record)))
 
 	copy(page[4:], record)
 
