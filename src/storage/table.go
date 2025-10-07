@@ -35,6 +35,12 @@ type TableManager struct {
 	FileManager *FileManager
 }
 
+type TableI interface {
+	CreateTable(name string, schema *Schema) error
+	Insert(tableName string, schema Schema, record Record) error
+	GetAllData(schema Schema, tableName string) (records []Record, err error)
+}
+
 const PageSize = 8192
 
 type PageHeader struct {
@@ -53,19 +59,19 @@ type Page struct {
 	Items  []ItemPointer
 }
 
-func NewTableManager(filePath string) (*TableManager, error) {
-	file_manager, err := NewFileManager(filePath)
+func NewTableManager(dataDir string) (*TableManager, error) {
+	fileManager, err := NewFileManager(dataDir)
 	if err != nil {
-		panic(err.Error())
+		return nil, err
 	}
-	return &TableManager{FileManager: file_manager}, nil
+	return &TableManager{FileManager: fileManager}, nil
 }
 
 func (tm *TableManager) CreateTable(name string, schema *Schema) error {
 	schema_exist := tm.FileManager.FileExists(name + ".schema")
 
 	if schema_exist {
-		return errors.New("file already exists")
+		return errors.New("schema already exists")
 	}
 
 	table_exist := tm.FileManager.FileExists(name + ".table")
