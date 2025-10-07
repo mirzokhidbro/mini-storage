@@ -8,36 +8,39 @@ import (
 )
 
 type FileManager struct {
+	root  string
 	files map[string]*os.File
 }
 
-func NewFileManager(fileName string) (*FileManager, error) {
-	path := "data"
-	entries, err := os.ReadDir(path)
+func NewFileManager(root string) (*FileManager, error) {
+	if _, err := os.Stat(root); os.IsNotExist(err) {
+		if mkErr := os.MkdirAll(root, 0o755); mkErr != nil {
+			return nil, mkErr
+		}
+	}
+
+	entries, err := os.ReadDir(root)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	files := make(map[string]*os.File)
 
 	for _, e := range entries {
 		if !e.IsDir() {
-			fullPath := filepath.Join(path, e.Name())
+			fullPath := filepath.Join(root, e.Name())
 			f, err := os.OpenFile(fullPath, os.O_RDWR, 0666)
 			if err != nil {
-				panic(err)
+				return nil, err
 			}
 
-			fileName := filepath.Base(f.Name())
+			base := filepath.Base(f.Name())
 
-			// fmt.Println("files")
-			// fmt.Println(fileName)
-
-			files[fileName] = f
+			files[base] = f
 		}
 	}
 
-	return &FileManager{files: files}, nil
+	return &FileManager{root: root, files: files}, nil
 }
 
 func (fm *FileManager) Write(fileName string, offset int64, data []byte) error {
@@ -76,20 +79,13 @@ func (fm *FileManager) ReadAll(fileName string) ([]byte, error) {
 
 func (fm *FileManager) FileExists(name string) bool {
 
-	// for i, f_name := range fm.files {
-	// 	fmt.Println("exist files")
-	// 	fmt.Println(i)
-	// 	fmt.Println("file name")
-	// 	fmt.Println(f_name)
-	// 	// fmt.Println(fm.files[name])
-	// }
-
 	_, ok := fm.files[name]
 	return ok
 }
 
 func (fm *FileManager) CreateFile(name string) (*os.File, error) {
-	file, err := os.Create(name)
+	full := filepath.Join(fm.root, name)
+	file, err := os.Create(full)
 	if err != nil {
 		return nil, err
 	}
@@ -98,11 +94,11 @@ func (fm *FileManager) CreateFile(name string) (*os.File, error) {
 }
 
 func (fm *FileManager) DeleteFile(name string) error {
-	return os.Remove(name)
+	return os.Remove(filepath.Join(fm.root, name))
 }
 
 func (fm *FileManager) OpenFile(name string) (*os.File, error) {
-	return os.OpenFile(name, os.O_RDWR, 0666)
+	return os.OpenFile(filepath.Join(fm.root, name), os.O_RDWR, 0666)
 }
 
 func (fm *FileManager) GetFileSize(fileName string) (int64, error) {

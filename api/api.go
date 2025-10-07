@@ -1,0 +1,41 @@
+package api
+
+import (
+	"net/http"
+	"rdbms/api/handlers"
+
+	"github.com/gin-gonic/gin"
+)
+
+func SetUpRouter(h handlers.Handler) (r *gin.Engine) {
+	r = gin.New()
+	r.Use(gin.Logger(), gin.Recovery())
+
+	r.Use(customCORSMiddleware())
+
+	baseRouter := r.Group("/api/v1")
+
+	{
+		orderStatuses := baseRouter.Group("tables")
+		orderStatuses.Use().POST("create-table", h.CreateTable)
+	}
+
+	return
+}
+
+func customCORSMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Access-Control-Allow-Credentials", "true")
+		c.Header("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, PATCH, DELETE")
+
+		c.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, Accept, Origin, Cache-Control, X-Requested-With")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+
+		c.Next()
+	}
+}

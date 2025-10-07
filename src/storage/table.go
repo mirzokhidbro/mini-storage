@@ -35,6 +35,12 @@ type TableManager struct {
 	FileManager *FileManager
 }
 
+type TableI interface {
+	CreateTable(name string, schema *Schema) error
+	Insert(tableName string, record Record) error
+	GetAllData(tableName string) (records []Record, err error)
+}
+
 const PageSize = 8192
 
 type PageHeader struct {
@@ -53,19 +59,19 @@ type Page struct {
 	Items  []ItemPointer
 }
 
-func NewTableManager(filePath string) (*TableManager, error) {
-	file_manager, err := NewFileManager(filePath)
+func NewTableManager(dataDir string) (*TableManager, error) {
+	fileManager, err := NewFileManager(dataDir)
 	if err != nil {
-		panic(err.Error())
+		return nil, err
 	}
-	return &TableManager{FileManager: file_manager}, nil
+	return &TableManager{FileManager: fileManager}, nil
 }
 
 func (tm *TableManager) CreateTable(name string, schema *Schema) error {
 	schema_exist := tm.FileManager.FileExists(name + ".schema")
 
 	if schema_exist {
-		return errors.New("file already exists")
+		return errors.New("schema already exists")
 	}
 
 	table_exist := tm.FileManager.FileExists(name + ".table")
@@ -112,19 +118,23 @@ func (tm *TableManager) GetTableSchema(schemaName string) (schema Schema, err er
 	return schema, nil
 }
 
-func (tm *TableManager) Insert(tableName string, schema Schema, record Record) error {
-	serialized_record := SerializeRecord(schema, record)
+func (tm *TableManager) Insert(tableName string, record Record) error {
 
-	page, page_order, err := tm.FindOrCreatePage(tableName, serialized_record)
-
-	fmt.Println("page order")
-	fmt.Println(page_order)
+	schema, err := tm.GetTableSchema(tableName + ".schema")
 
 	if err != nil {
 		return err
 	}
 
-	err = tm.FileManager.Write(tableName, (int64(page_order)-1)*8192, page)
+	serialized_record := SerializeRecord(schema, record)
+
+	page, page_order, err := tm.FindOrCreatePage(tableName+".table", serialized_record)
+
+	if err != nil {
+		return err
+	}
+
+	err = tm.FileManager.Write(tableName+".table", (int64(page_order)-1)*8192, page)
 
 	if err != nil {
 		return err
@@ -133,14 +143,21 @@ func (tm *TableManager) Insert(tableName string, schema Schema, record Record) e
 	return nil
 }
 
-func (tm *TableManager) GetAllData(schema Schema, tableName string) (records []Record, err error) {
-	size, err := tm.FileManager.GetFileSize(tableName)
+func (tm *TableManager) GetAllData(tableName string) (records []Record, err error) {
+
+	schema, err := tm.GetTableSchema(tableName + ".schema")
+
+	if err != nil {
+		return nil, err
+	}
+
+	size, err := tm.FileManager.GetFileSize(tableName + ".table")
 	if err != nil {
 		return nil, err
 	}
 
 	pages_count := int(size / PageSize)
-	binary_data, err := tm.FileManager.Read(tableName, 0, size)
+	binary_data, err := tm.FileManager.Read(tableName+".table", 0, size)
 
 	if err != nil {
 		return records, err
