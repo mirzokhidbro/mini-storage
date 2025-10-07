@@ -30,7 +30,6 @@ type Record struct {
 type Item struct {
 	Literal interface{}
 }
-
 type TableManager struct {
 	FileManager *FileManager
 }
@@ -39,6 +38,7 @@ type TableI interface {
 	CreateTable(name string, schema *Schema) error
 	Insert(tableName string, record Record) error
 	GetAllData(tableName string) (records []Record, err error)
+	GetTableSchema(schemaName string) (Schema, error)
 }
 
 const PageSize = 8192

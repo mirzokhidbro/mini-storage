@@ -16,10 +16,15 @@ func SetUpRouter(h handlers.Handler) (r *gin.Engine) {
 	baseRouter := r.Group("/api/v1")
 
 	{
-		orderStatuses := baseRouter.Group("tables")
-		orderStatuses.Use().POST("create-table", h.CreateTable)
+		table := baseRouter.Group("tables")
+		table.Use().POST("create-table", h.CreateTable)
 	}
 
+	{
+		table := baseRouter.Group("records")
+		table.Use().POST("insert", h.InsertRecord)
+		table.Use().POST("query", h.GetAllRecords)
+	}
 	return
 }
 
