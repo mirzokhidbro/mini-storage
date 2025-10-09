@@ -3,7 +3,6 @@ package storage
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 )
 
 type ColumnType int
@@ -210,17 +209,16 @@ func (tm *TableManager) FindOrCreatePage(tableName string, record []byte) (page 
 		record_count := uint16(binary.LittleEndian.Uint16(page[:2]))
 		free_space_pointer := uint16(binary.LittleEndian.Uint16(page[2:4]))
 
-		free_space_length := PageSize - ((record_count+1)*4 + free_space_pointer)
+		free_space_length := PageSize - ((int(record_count)+1)*4 + int(free_space_pointer))
 
-		if free_space_length >= record_size {
-			slot_beginning_address := (PageSize - record_count*4) - 4
+		if free_space_length >= int(record_size) {
+			slot_beginning_address := (PageSize - int(record_count)*4) - 4
+
 			record_count++
 			binary.LittleEndian.PutUint16(page[:2], uint16(record_count))
 			copy(page[free_space_pointer:], record)
 
-			fmt.Println(slot_beginning_address+2, slot_beginning_address+4)
 			binary.LittleEndian.PutUint16(page[slot_beginning_address+2:slot_beginning_address+4], uint16(free_space_pointer))
-			fmt.Println(slot_beginning_address, slot_beginning_address+2)
 			binary.LittleEndian.PutUint16(page[slot_beginning_address:slot_beginning_address+2], record_size)
 
 			free_space_pointer += record_size
@@ -235,8 +233,8 @@ func (tm *TableManager) FindOrCreatePage(tableName string, record []byte) (page 
 
 	copy(page[4:], record)
 
-	binary.LittleEndian.PutUint16(page[8190:8192], uint16(4))
-	binary.LittleEndian.PutUint16(page[8188:8190], uint16(len(record)))
+	binary.LittleEndian.PutUint16(page[PageSize-4:PageSize-2], uint16(len(record)))
+	binary.LittleEndian.PutUint16(page[PageSize-2:PageSize], uint16(4))
 
 	return page, page_order + 1, nil
 }
