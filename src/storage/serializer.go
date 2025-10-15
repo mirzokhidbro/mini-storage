@@ -112,3 +112,23 @@ func DeserializeRecord(schema Schema, data []byte) Record {
 
 	return Record{Items: items}
 }
+
+func DeserializeFSM(data []byte) []uint16 {
+	if len(data)%2 != 0 {
+		return []uint16{}
+	}
+	count := len(data) / 2
+	res := make([]uint16, count)
+	off := 0
+	for i := 0; i < count; i++ {
+		res[i] = binary.LittleEndian.Uint16(data[off : off+2])
+		off += 2
+	}
+	return res
+}
+
+func SerializeFSM(size int16) []byte {
+	var buf bytes.Buffer
+	binary.Write(&buf, binary.LittleEndian, size)
+	return buf.Bytes()
+}
