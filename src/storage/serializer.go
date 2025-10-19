@@ -3,7 +3,10 @@ package storage
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
+	"math"
+	"time"
 )
 
 func SerializeSchema(schema *Schema) []byte {
@@ -68,14 +71,14 @@ func SerializeRecord(schema Schema, record Record) []byte {
 
 	for i := 0; i < column_count; i++ {
 		switch schema.Columns[i].Type {
-		case 0: // integer
+		case TypeInt: // integer
 			literal, ok := record.Items[i].Literal.(int)
 			if ok {
 				binary.Write(&buf, binary.LittleEndian, int64(literal))
 			} else {
 				fmt.Println("invalid data type for integer")
 			}
-		case 1: // varchar
+		case TypeVarchar: // varchar
 			literal, ok := record.Items[i].Literal.(string)
 			if ok {
 				literal_length := len(literal)
@@ -83,6 +86,43 @@ func SerializeRecord(schema Schema, record Record) []byte {
 				buf.Write([]byte(literal))
 			} else {
 				fmt.Println("invalid data type for string")
+			}
+		case TypeDate: // date
+			s, ok := record.Items[i].Literal.(string)
+			if ok {
+				if d, err := daysFromDateString(s); err == nil {
+					binary.Write(&buf, binary.LittleEndian, int32(d))
+				} else {
+					fmt.Println("invalid date format")
+				}
+			} else {
+				fmt.Println("invalid data type for date")
+			}
+		case TypeTimestamp: // timestamp
+			s, ok := record.Items[i].Literal.(string)
+			if ok {
+				if us, err := microsFromTimestampString(s); err == nil {
+					binary.Write(&buf, binary.LittleEndian, int64(us))
+				} else {
+					fmt.Println("invalid timestamp format")
+				}
+			} else {
+				fmt.Println("invalid data type for timestamp")
+			}
+		case TypeFloat: // float
+			f, ok := record.Items[i].Literal.(float64)
+			if ok {
+				binary.Write(&buf, binary.LittleEndian, f)
+			} else {
+				fmt.Println("invalid data type for float")
+			}
+		case TypeJSON:
+			s, ok := record.Items[i].Literal.(string)
+			if ok {
+				binary.Write(&buf, binary.LittleEndian, int16(len(s)))
+				buf.WriteString(s)
+			} else {
+				fmt.Println("invalid data type for json")
 			}
 		}
 	}
@@ -96,17 +136,41 @@ func DeserializeRecord(schema Schema, data []byte) Record {
 
 	for i := 0; i < len(schema.Columns); i++ {
 		switch schema.Columns[i].Type {
-		case 0: // int
+		case TypeInt: // int
 			val := int64(binary.LittleEndian.Uint64(data[offset : offset+8]))
 			offset += 8
 			items = append(items, Item{Literal: val})
-
-		case 1: // varchar
+		case TypeVarchar: // varchar
 			strlen := int(binary.LittleEndian.Uint16(data[offset : offset+2]))
 			offset += 2
 			str := string(data[offset : offset+strlen])
 			offset += strlen
 			items = append(items, Item{Literal: str})
+		case TypeDate: // date
+			v := int32(binary.LittleEndian.Uint32(data[offset : offset+4]))
+			offset += 4
+			items = append(items, Item{Literal: dateStringFromDays(v)})
+		case TypeTimestamp: // timestamp
+			v := int64(binary.LittleEndian.Uint64(data[offset : offset+8]))
+			offset += 8
+			items = append(items, Item{Literal: timestampStringFromMicros(v)})
+		case TypeFloat: // float
+			bits := binary.LittleEndian.Uint64(data[offset : offset+8])
+			f := math.Float64frombits(bits)
+			offset += 8
+			items = append(items, Item{Literal: f})
+		case TypeJSON: // json
+			strlen := int(binary.LittleEndian.Uint16(data[offset : offset+2]))
+			offset += 2
+			raw := data[offset : offset+strlen]
+			offset += strlen
+			var v any
+			if err := json.Unmarshal(raw, &v); err != nil {
+				// If invalid JSON on disk, fall back to string
+				items = append(items, Item{Literal: string(raw)})
+			} else {
+				items = append(items, Item{Literal: v})
+			}
 		}
 	}
 
@@ -131,4 +195,34 @@ func SerializeFSM(size int16) []byte {
 	var buf bytes.Buffer
 	binary.Write(&buf, binary.LittleEndian, size)
 	return buf.Bytes()
+}
+
+func daysFromDateString(s string) (int32, error) {
+	t, err := time.Parse("2006-01-02", s)
+	if err != nil {
+		return 0, err
+	}
+	secs := t.UTC().Unix()
+	return int32(secs / 86400), nil
+}
+
+func dateStringFromDays(d int32) string {
+	t := time.Unix(int64(d)*86400, 0).UTC()
+	return t.Format("2006-01-02")
+}
+
+func microsFromTimestampString(s string) (int64, error) {
+	t, err := time.Parse(time.RFC3339Nano, s)
+	if err != nil {
+		return 0, err
+	}
+	t = t.UTC()
+	return t.Unix()*1000000 + int64(t.Nanosecond()/1000), nil
+}
+
+func timestampStringFromMicros(us int64) string {
+	sec := us / 1000000
+	usec := us % 1000000
+	t := time.Unix(sec, usec*1000).UTC()
+	return t.Format(time.RFC3339Nano)
 }

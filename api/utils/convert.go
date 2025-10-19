@@ -39,6 +39,18 @@ func ToStorageSchema(req models.CreateTableRequest) (storage.Schema, error) {
 					return storage.Schema{}, errors.New("invalid length for varchar column")
 				}
 			}
+		case 2:
+			column_type = storage.TypeDate
+			length = 0
+		case 3:
+			column_type = storage.TypeTimestamp
+			length = 0
+		case 4:
+			column_type = storage.TypeFloat
+			length = 0
+		case 5:
+			column_type = storage.TypeJSON
+			length = 0
 		default:
 			return storage.Schema{}, errors.New("unsupported type")
 		}

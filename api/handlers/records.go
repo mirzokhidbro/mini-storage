@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"encoding/json"
 	"rdbms/api/http"
 	"rdbms/api/models"
 	"rdbms/src/storage"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -45,6 +47,42 @@ func (h *Handler) InsertRecord(c *gin.Context) {
 			}
 			if len(s) > col.Length {
 				h.handleResponse(c, http.InvalidArgument, "column "+col.Name+" exceeds length")
+				return
+			}
+			items = append(items, storage.Item{Literal: s})
+		case storage.TypeFloat:
+			f, ok := v.(float64)
+			if !ok {
+				h.handleResponse(c, http.InvalidArgument, "column "+col.Name+" must be number")
+				return
+			}
+			items = append(items, storage.Item{Literal: f})
+		case storage.TypeJSON:
+			b, err := json.Marshal(v)
+			if err != nil {
+				h.handleResponse(c, http.InvalidArgument, "invalid json for "+col.Name)
+				return
+			}
+			items = append(items, storage.Item{Literal: string(b)})
+		case storage.TypeDate:
+			s, ok := v.(string)
+			if !ok {
+				h.handleResponse(c, http.InvalidArgument, "column "+col.Name+" must be date string YYYY-MM-DD")
+				return
+			}
+			if _, err := time.Parse("2006-01-02", s); err != nil {
+				h.handleResponse(c, http.InvalidArgument, "invalid date format for "+col.Name)
+				return
+			}
+			items = append(items, storage.Item{Literal: s})
+		case storage.TypeTimestamp:
+			s, ok := v.(string)
+			if !ok {
+				h.handleResponse(c, http.InvalidArgument, "column "+col.Name+" must be RFC3339 timestamp string")
+				return
+			}
+			if _, err := time.Parse(time.RFC3339Nano, s); err != nil {
+				h.handleResponse(c, http.InvalidArgument, "invalid timestamp format for "+col.Name)
 				return
 			}
 			items = append(items, storage.Item{Literal: s})

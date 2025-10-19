@@ -10,6 +10,10 @@ type ColumnType int
 const (
 	TypeInt ColumnType = iota
 	TypeVarchar
+	TypeDate
+	TypeTimestamp
+	TypeFloat
+	TypeJSON
 )
 
 type Column struct {
