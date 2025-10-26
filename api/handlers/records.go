@@ -110,7 +110,9 @@ func (h *Handler) GetAllRecords(c *gin.Context) {
 		return
 	}
 
-	records, err := h.Stg.Table().GetAllData(req.Name)
+	filters := []storage.Filter{}
+
+	records, err := h.Stg.Table().GetAllData(req.Name, filters)
 	if err != nil {
 		h.handleResponse(c, http.InternalServerError, err.Error())
 		return

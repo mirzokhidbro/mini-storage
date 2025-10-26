@@ -3,6 +3,7 @@ package storage
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 )
 
 type ColumnType int
@@ -30,9 +31,17 @@ type Record struct {
 	Items []Item
 }
 
+type Filter struct {
+	Column      string
+	Operator    string
+	Value       interface{}
+	ColumnIndex int
+}
+
 type Item struct {
 	Literal interface{}
 }
+
 type TableManager struct {
 	FileManager *FileManager
 }
@@ -40,7 +49,7 @@ type TableManager struct {
 type TableI interface {
 	CreateTable(name string, schema *Schema) error
 	Insert(tableName string, record Record) error
-	GetAllData(tableName string) (records []Record, err error)
+	GetAllData(tableName string, filters []Filter) (records []Record, err error)
 	GetTableSchema(schemaName string) (Schema, error)
 }
 
@@ -138,6 +147,8 @@ func (tm *TableManager) Insert(tableName string, record Record) error {
 	schema, err := tm.GetTableSchema(tableName + ".schema")
 
 	if err != nil {
+		fmt.Println("schema")
+		fmt.Println(err.Error())
 		return err
 	}
 
@@ -146,19 +157,23 @@ func (tm *TableManager) Insert(tableName string, record Record) error {
 	page, page_order, err := tm.FindOrCreatePage(tableName, serialized_record)
 
 	if err != nil {
+		fmt.Println("page finding section:")
+		fmt.Println(err.Error())
 		return err
 	}
 
 	err = tm.FileManager.Write(tableName+".table", (int64(page_order)-1)*8192, page)
 
 	if err != nil {
+		fmt.Println("page section")
+		fmt.Println(err.Error())
 		return err
 	}
 
 	return nil
 }
 
-func (tm *TableManager) GetAllData(tableName string) (records []Record, err error) {
+func (tm *TableManager) GetAllData(tableName string, filters []Filter) (records []Record, err error) {
 
 	schema, err := tm.GetTableSchema(tableName + ".schema")
 
@@ -198,7 +213,15 @@ func (tm *TableManager) GetAllData(tableName string) (records []Record, err erro
 			offset -= 2
 			record_length := uint16(binary.LittleEndian.Uint16(page[offset-2 : offset]))
 			rec := DeserializeRecord(schema, page[record_offset:record_offset+record_length])
-			records = append(records, rec)
+			for _, filter := range filters {
+				// fmt.Println(rec.Items[filter.ColumnIndex].Literal, filter.Value)
+				if rec.Items[filter.ColumnIndex].Literal != filter.Value {
+					continue
+				}
+				// fmt.Println("usernames")
+				// fmt.Println(rec.Items[filter.ColumnIndex].Literal)
+				records = append(records, rec)
+			}
 			offset -= 2
 			record_count--
 		}
