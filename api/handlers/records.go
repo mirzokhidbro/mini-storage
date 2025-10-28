@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"rdbms/api/http"
 	"rdbms/api/models"
+	"rdbms/api/utils"
 	"rdbms/src/storage"
 	"time"
 
@@ -110,7 +111,20 @@ func (h *Handler) GetAllRecords(c *gin.Context) {
 		return
 	}
 
-	filters := []storage.Filter{}
+	filters := make([]storage.Filter, 0, len(req.Filter))
+	for _, f := range req.Filter {
+		filters = append(filters, storage.Filter{
+			Column:   f.Column,
+			Operator: f.Operator,
+			Value:    f.Value,
+		})
+	}
+
+	filters, err = utils.SetFilterColumnIndexes(schema, filters)
+	if err != nil {
+		h.handleResponse(c, http.InvalidArgument, err.Error())
+		return
+	}
 
 	records, err := h.Stg.Table().GetAllData(req.Name, filters)
 	if err != nil {

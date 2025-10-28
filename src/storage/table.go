@@ -17,6 +17,19 @@ const (
 	TypeJSON
 )
 
+type FilterOperator string
+
+const (
+	OpEq FilterOperator = "="
+	OpNe FilterOperator = "!="
+	// OpLt FilterOperator = "<"
+	// OpLe FilterOperator = "<="
+	// OpGt FilterOperator = ">"
+	// OpGe FilterOperator = ">="
+	// OpIn   FilterOperator = "IN"
+	// OpLike FilterOperator = "LIKE"
+)
+
 type Column struct {
 	Name   string
 	Type   ColumnType
@@ -213,13 +226,7 @@ func (tm *TableManager) GetAllData(tableName string, filters []Filter) (records 
 			offset -= 2
 			record_length := uint16(binary.LittleEndian.Uint16(page[offset-2 : offset]))
 			rec := DeserializeRecord(schema, page[record_offset:record_offset+record_length])
-			for _, filter := range filters {
-				// fmt.Println(rec.Items[filter.ColumnIndex].Literal, filter.Value)
-				if rec.Items[filter.ColumnIndex].Literal != filter.Value {
-					continue
-				}
-				// fmt.Println("usernames")
-				// fmt.Println(rec.Items[filter.ColumnIndex].Literal)
+			if recordFilter(rec, filters, schema) {
 				records = append(records, rec)
 			}
 			offset -= 2
@@ -228,6 +235,50 @@ func (tm *TableManager) GetAllData(tableName string, filters []Filter) (records 
 	}
 
 	return records, nil
+}
+
+func recordFilter(record Record, filters []Filter, schema Schema) bool {
+	for _, filter := range filters {
+		recordValue := record.Items[filter.ColumnIndex].Literal
+		filterValue := filter.Value
+		columnType := schema.Columns[filter.ColumnIndex].Type
+
+		switch filter.Operator {
+		case string(OpEq):
+			if !compareEqual(recordValue, filterValue, columnType) {
+				return false
+			}
+		case string(OpNe):
+			if compareEqual(recordValue, filterValue, columnType) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func compareEqual(a, b interface{}, colType ColumnType) bool {
+	switch colType {
+	case TypeInt:
+		v1, ok1 := a.(int64)
+		v2, ok2 := b.(int64)
+		if ok1 && ok2 {
+			return v1 == v2
+		}
+	case TypeFloat:
+		v1, ok1 := a.(float64)
+		v2, ok2 := b.(float64)
+		if ok1 && ok2 {
+			return v1 == v2
+		}
+	case TypeVarchar, TypeDate, TypeTimestamp:
+		v1, ok1 := a.(string)
+		v2, ok2 := b.(string)
+		if ok1 && ok2 {
+			return v1 == v2
+		}
+	}
+	return false
 }
 
 func (tm *TableManager) FindOrCreatePage(tableName string, record []byte) (page []byte, page_order int, err error) {
