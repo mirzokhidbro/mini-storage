@@ -6,5 +6,12 @@ type InsertRecordRequest struct {
 }
 
 type GetAllRecordsRequest struct {
-	Name string `json:"name" binding:"required"`
+	Name   string              `json:"name" binding:"required"`
+	Filter []FilterRequestItem `json:"filter"`
+}
+
+type FilterRequestItem struct {
+	Column   string `json:"column" binding:"required"`
+	Operator string `json:"operator" binding:"required"`
+	Value    any    `json:"value" binding:"required"`
 }
