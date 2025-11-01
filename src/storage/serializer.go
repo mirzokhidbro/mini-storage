@@ -130,51 +130,82 @@ func SerializeRecord(schema Schema, record Record) []byte {
 	return buf.Bytes()
 }
 
-func DeserializeRecord(schema Schema, data []byte) Record {
+func DeserializeRecord(schema Schema, data []byte, columnProjection map[int]ColumnProjection) *Record {
 	offset := 0
 	items := make([]Item, 0, len(schema.Columns))
 
 	for i := 0; i < len(schema.Columns); i++ {
+		must_extract := columnProjection[i].MustExtract
+		filterable := columnProjection[i].IsFiltered
+
 		switch schema.Columns[i].Type {
 		case TypeInt: // int
-			val := int64(binary.LittleEndian.Uint64(data[offset : offset+8]))
+			if must_extract {
+				if filterable {
+					fmt.Println("this column is filterable and its value is:")
+					fmt.Println(columnProjection[i].Name)
+					fmt.Println(columnProjection[i].FilterValue)
+				}
+				val := int64(binary.LittleEndian.Uint64(data[offset : offset+8]))
+				items = append(items, Item{Literal: val})
+			}
 			offset += 8
-			items = append(items, Item{Literal: val})
 		case TypeVarchar: // varchar
 			strlen := int(binary.LittleEndian.Uint16(data[offset : offset+2]))
 			offset += 2
-			str := string(data[offset : offset+strlen])
+			if must_extract {
+				str := string(data[offset : offset+strlen])
+				if filterable {
+					filterValue, ok := columnProjection[i].FilterValue.(string)
+					if ok && str != filterValue {
+						return nil
+					}
+				}
+
+				items = append(items, Item{Literal: str})
+			}
 			offset += strlen
-			items = append(items, Item{Literal: str})
 		case TypeDate: // date
-			v := int32(binary.LittleEndian.Uint32(data[offset : offset+4]))
+			if must_extract {
+				v := int32(binary.LittleEndian.Uint32(data[offset : offset+4]))
+				items = append(items, Item{Literal: dateStringFromDays(v)})
+			}
 			offset += 4
-			items = append(items, Item{Literal: dateStringFromDays(v)})
 		case TypeTimestamp: // timestamp
-			v := int64(binary.LittleEndian.Uint64(data[offset : offset+8]))
+			if must_extract {
+				v := int64(binary.LittleEndian.Uint64(data[offset : offset+8]))
+				items = append(items, Item{Literal: timestampStringFromMicros(v)})
+			}
 			offset += 8
-			items = append(items, Item{Literal: timestampStringFromMicros(v)})
 		case TypeFloat: // float
-			bits := binary.LittleEndian.Uint64(data[offset : offset+8])
-			f := math.Float64frombits(bits)
+			if must_extract {
+				bits := binary.LittleEndian.Uint64(data[offset : offset+8])
+				f := math.Float64frombits(bits)
+				items = append(items, Item{Literal: f})
+			}
 			offset += 8
-			items = append(items, Item{Literal: f})
 		case TypeJSON: // json
 			strlen := int(binary.LittleEndian.Uint16(data[offset : offset+2]))
 			offset += 2
-			raw := data[offset : offset+strlen]
-			offset += strlen
-			var v any
-			if err := json.Unmarshal(raw, &v); err != nil {
-				// If invalid JSON on disk, fall back to string
-				items = append(items, Item{Literal: string(raw)})
-			} else {
-				items = append(items, Item{Literal: v})
+			if must_extract {
+				raw := data[offset : offset+strlen]
+				var v any
+				if err := json.Unmarshal(raw, &v); err != nil {
+					// If invalid JSON on disk, fall back to string
+					items = append(items, Item{Literal: string(raw)})
+				} else {
+					items = append(items, Item{Literal: v})
+				}
 			}
+			offset += strlen
 		}
 	}
 
-	return Record{Items: items}
+	if len(items) == 0 {
+		return nil
+	}
+
+	return &Record{Items: items}
 }
 
 func DeserializeFSM(data []byte) []uint16 {
