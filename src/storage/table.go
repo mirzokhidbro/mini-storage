@@ -44,11 +44,25 @@ type Record struct {
 	Items []Item
 }
 
+// filter
 type Filter struct {
 	Column      string
 	Operator    string
 	Value       interface{}
 	ColumnIndex int
+}
+
+type SelectedColumns struct {
+	Columns []string
+}
+
+type ColumnProjection struct {
+	Name        string
+	Index       int
+	IsFiltered  bool
+	IsProjected bool
+	MustExtract bool
+	FilterValue any
 }
 
 type Item struct {
@@ -62,7 +76,7 @@ type TableManager struct {
 type TableI interface {
 	CreateTable(name string, schema *Schema) error
 	Insert(tableName string, record Record) error
-	GetAllData(tableName string, filters []Filter) (records []Record, err error)
+	GetAllData(tableName string, filters []Filter, selectedColumns SelectedColumns) ([]map[string]any, error)
 	GetTableSchema(schemaName string) (Schema, error)
 }
 
@@ -186,13 +200,13 @@ func (tm *TableManager) Insert(tableName string, record Record) error {
 	return nil
 }
 
-func (tm *TableManager) GetAllData(tableName string, filters []Filter) (records []Record, err error) {
-
+func (tm *TableManager) GetAllData(tableName string, filters []Filter, selectedColumns SelectedColumns) ([]map[string]any, error) {
 	schema, err := tm.GetTableSchema(tableName + ".schema")
-
 	if err != nil {
 		return nil, err
 	}
+
+	data := make([]map[string]any, 0)
 
 	fsm_size, err := tm.FileManager.GetFileSize(tableName + ".fsm")
 	if err != nil {
@@ -225,16 +239,28 @@ func (tm *TableManager) GetAllData(tableName string, filters []Filter) (records 
 			record_offset := uint16(binary.LittleEndian.Uint16(page[offset-2 : offset]))
 			offset -= 2
 			record_length := uint16(binary.LittleEndian.Uint16(page[offset-2 : offset]))
-			rec := DeserializeRecord(schema, page[record_offset:record_offset+record_length])
-			if recordFilter(rec, filters, schema) {
-				records = append(records, rec)
+			columnProjection := BuildColumnProjection(schema, filters, selectedColumns)
+			rec := DeserializeRecord(schema, page[record_offset:record_offset+record_length], columnProjection)
+			if rec != nil {
+				row := make(map[string]any)
+				itemIndex := 0
+				for colIndex := 0; colIndex < len(schema.Columns); colIndex++ {
+					if columnProjection[colIndex].IsProjected {
+						row[columnProjection[colIndex].Name] = rec.Items[itemIndex].Literal
+						itemIndex++
+					}
+				}
+				data = append(data, row)
 			}
 			offset -= 2
 			record_count--
 		}
 	}
 
-	return records, nil
+	fmt.Println("data")
+	fmt.Println(data)
+	return data, nil
+
 }
 
 func recordFilter(record Record, filters []Filter, schema Schema) bool {
@@ -366,4 +392,35 @@ func (tm *TableManager) FindOrCreatePage(tableName string, record []byte) (page 
 	}
 
 	return page, pages_count + 1, nil
+}
+
+func BuildColumnProjection(schema Schema, filters []Filter, selectedColumns SelectedColumns) map[int]ColumnProjection {
+	filteredCols := make(map[string]bool)
+	filterValues := make(map[string]any)
+	for _, filter := range filters {
+		filteredCols[filter.Column] = true
+		filterValues[filter.Column] = filter.Value
+	}
+
+	projectedCols := make(map[string]bool)
+	for _, colName := range selectedColumns.Columns {
+		projectedCols[colName] = true
+	}
+
+	projection := make(map[int]ColumnProjection)
+	for i, column := range schema.Columns {
+		isFiltered := filteredCols[column.Name]
+		isProjected := projectedCols[column.Name]
+
+		projection[i] = ColumnProjection{
+			Name:        column.Name,
+			Index:       i,
+			IsFiltered:  isFiltered,
+			IsProjected: isProjected,
+			MustExtract: isFiltered || isProjected,
+			FilterValue: filterValues[column.Name],
+		}
+	}
+
+	return projection
 }

@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"rdbms/api/http"
 	"rdbms/api/models"
-	"rdbms/api/utils"
 	"rdbms/src/storage"
+	"rdbms/utils"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -125,20 +125,11 @@ func (h *Handler) GetAllRecords(c *gin.Context) {
 		h.handleResponse(c, http.InvalidArgument, err.Error())
 		return
 	}
-
-	records, err := h.Stg.Table().GetAllData(req.Name, filters)
+	selectedColumns := storage.SelectedColumns{Columns: req.Columns}
+	data, err := h.Stg.Table().GetAllData(req.Name, filters, selectedColumns)
 	if err != nil {
 		h.handleResponse(c, http.InternalServerError, err.Error())
 		return
-	}
-
-	data := make([]map[string]any, 0, len(records))
-	for _, r := range records {
-		row := make(map[string]any, len(schema.Columns))
-		for i, col := range schema.Columns {
-			row[col.Name] = r.Items[i].Literal
-		}
-		data = append(data, row)
 	}
 
 	h.handleResponse(c, http.OK, data)
