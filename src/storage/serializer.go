@@ -130,24 +130,40 @@ func SerializeRecord(schema Schema, record Record) []byte {
 	return buf.Bytes()
 }
 
+// TODO: Extract filtering logic into a separate method
 func DeserializeRecord(schema Schema, data []byte, columnProjection map[int]ColumnProjection) *Record {
 	offset := 0
 	items := make([]Item, 0, len(schema.Columns))
 
 	for i := 0; i < len(schema.Columns); i++ {
 		must_extract := columnProjection[i].MustExtract
-		filterable := columnProjection[i].IsFiltered
+		is_filtered := columnProjection[i].IsFiltered
+		is_projected := columnProjection[i].IsProjected
 
 		switch schema.Columns[i].Type {
-		case TypeInt: // int
+		case TypeInt:
 			if must_extract {
-				if filterable {
-					fmt.Println("this column is filterable and its value is:")
-					fmt.Println(columnProjection[i].Name)
-					fmt.Println(columnProjection[i].FilterValue)
-				}
 				val := int64(binary.LittleEndian.Uint64(data[offset : offset+8]))
-				items = append(items, Item{Literal: val})
+				if is_filtered {
+					filterValue, ok := columnProjection[i].FilterValue.(int64)
+					if !ok {
+						return nil
+					}
+					operator := columnProjection[i].FilterOperator
+					matches := false
+					switch operator {
+					case string(OpEq):
+						matches = (val == filterValue)
+					case string(OpNe):
+						matches = (val != filterValue)
+					}
+					if !matches {
+						return nil
+					}
+				}
+				if is_projected {
+					items = append(items, Item{Literal: val})
+				}
 			}
 			offset += 8
 		case TypeVarchar: // varchar
@@ -155,43 +171,114 @@ func DeserializeRecord(schema Schema, data []byte, columnProjection map[int]Colu
 			offset += 2
 			if must_extract {
 				str := string(data[offset : offset+strlen])
-				if filterable {
+				if is_filtered {
 					filterValue, ok := columnProjection[i].FilterValue.(string)
-					if ok && str != filterValue {
+					if !ok {
+						return nil
+					}
+					operator := columnProjection[i].FilterOperator
+					matches := false
+					switch operator {
+					case string(OpEq):
+						matches = (str == filterValue)
+					case string(OpNe):
+						matches = (str != filterValue)
+					}
+					if !matches {
 						return nil
 					}
 				}
-
-				items = append(items, Item{Literal: str})
+				if is_projected {
+					items = append(items, Item{Literal: str})
+				}
 			}
+
 			offset += strlen
 		case TypeDate: // date
 			if must_extract {
 				v := int32(binary.LittleEndian.Uint32(data[offset : offset+4]))
-				items = append(items, Item{Literal: dateStringFromDays(v)})
+				dateStr := dateStringFromDays(v)
+				if is_filtered {
+					filterValue, ok := columnProjection[i].FilterValue.(string)
+					if !ok {
+						return nil
+					}
+					operator := columnProjection[i].FilterOperator
+					matches := false
+					switch operator {
+					case string(OpEq):
+						matches = (dateStr == filterValue)
+					case string(OpNe):
+						matches = (dateStr != filterValue)
+					}
+					if !matches {
+						return nil
+					}
+				}
+				if is_projected {
+					items = append(items, Item{Literal: dateStr})
+				}
 			}
 			offset += 4
 		case TypeTimestamp: // timestamp
 			if must_extract {
 				v := int64(binary.LittleEndian.Uint64(data[offset : offset+8]))
-				items = append(items, Item{Literal: timestampStringFromMicros(v)})
+				timestampStr := timestampStringFromMicros(v)
+				if is_filtered {
+					filterValue, ok := columnProjection[i].FilterValue.(string)
+					if !ok {
+						return nil
+					}
+					operator := columnProjection[i].FilterOperator
+					matches := false
+					switch operator {
+					case string(OpEq):
+						matches = (timestampStr == filterValue)
+					case string(OpNe):
+						matches = (timestampStr != filterValue)
+					}
+					if !matches {
+						return nil
+					}
+				}
+				if is_projected {
+					items = append(items, Item{Literal: timestampStr})
+				}
 			}
 			offset += 8
 		case TypeFloat: // float
 			if must_extract {
 				bits := binary.LittleEndian.Uint64(data[offset : offset+8])
 				f := math.Float64frombits(bits)
-				items = append(items, Item{Literal: f})
+				if is_filtered {
+					filterValue, ok := columnProjection[i].FilterValue.(float64)
+					if !ok {
+						return nil
+					}
+					operator := columnProjection[i].FilterOperator
+					matches := false
+					switch operator {
+					case string(OpEq):
+						matches = (f == filterValue)
+					case string(OpNe):
+						matches = (f != filterValue)
+					}
+					if !matches {
+						return nil
+					}
+				}
+				if is_projected {
+					items = append(items, Item{Literal: f})
+				}
 			}
 			offset += 8
 		case TypeJSON: // json
 			strlen := int(binary.LittleEndian.Uint16(data[offset : offset+2]))
 			offset += 2
-			if must_extract {
+			if is_projected {
 				raw := data[offset : offset+strlen]
 				var v any
 				if err := json.Unmarshal(raw, &v); err != nil {
-					// If invalid JSON on disk, fall back to string
 					items = append(items, Item{Literal: string(raw)})
 				} else {
 					items = append(items, Item{Literal: v})

@@ -102,11 +102,11 @@ func SetFilterColumnIndexes(schema storage.Schema, filters []storage.Filter) ([]
 		switch colType {
 		case storage.TypeInt:
 			n, ok := f.Value.(float64)
-			if !ok || n != float64(int(n)) {
+			if !ok || n != float64(int64(n)) {
 				typeErrors = append(typeErrors, fmt.Sprintf("%s: expected integer", f.Column))
 				continue
 			}
-			filterValue = int(n)
+			filterValue = int64(n)
 		case storage.TypeFloat:
 			n, ok := f.Value.(float64)
 			if !ok {

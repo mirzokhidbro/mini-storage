@@ -57,12 +57,13 @@ type SelectedColumns struct {
 }
 
 type ColumnProjection struct {
-	Name        string
-	Index       int
-	IsFiltered  bool
-	IsProjected bool
-	MustExtract bool
-	FilterValue any
+	Name           string
+	Index          int
+	IsFiltered     bool
+	IsProjected    bool
+	MustExtract    bool
+	FilterValue    any
+	FilterOperator string
 }
 
 type Item struct {
@@ -257,8 +258,6 @@ func (tm *TableManager) GetAllData(tableName string, filters []Filter, selectedC
 		}
 	}
 
-	fmt.Println("data")
-	fmt.Println(data)
 	return data, nil
 
 }
@@ -397,9 +396,11 @@ func (tm *TableManager) FindOrCreatePage(tableName string, record []byte) (page 
 func BuildColumnProjection(schema Schema, filters []Filter, selectedColumns SelectedColumns) map[int]ColumnProjection {
 	filteredCols := make(map[string]bool)
 	filterValues := make(map[string]any)
+	filterOperator := make(map[string]string)
 	for _, filter := range filters {
 		filteredCols[filter.Column] = true
 		filterValues[filter.Column] = filter.Value
+		filterOperator[filter.Column] = filter.Operator
 	}
 
 	projectedCols := make(map[string]bool)
@@ -413,12 +414,13 @@ func BuildColumnProjection(schema Schema, filters []Filter, selectedColumns Sele
 		isProjected := projectedCols[column.Name]
 
 		projection[i] = ColumnProjection{
-			Name:        column.Name,
-			Index:       i,
-			IsFiltered:  isFiltered,
-			IsProjected: isProjected,
-			MustExtract: isFiltered || isProjected,
-			FilterValue: filterValues[column.Name],
+			Name:           column.Name,
+			Index:          i,
+			IsFiltered:     isFiltered,
+			IsProjected:    isProjected,
+			MustExtract:    isFiltered || isProjected,
+			FilterValue:    filterValues[column.Name],
+			FilterOperator: filterOperator[column.Name],
 		}
 	}
 
